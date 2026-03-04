@@ -87,12 +87,18 @@ def display_menu_with_cursor(menu):
         draw.text((0, y_position), line, font=font, fill=text_color)
     oled.drawImage(image)
 
-def show_centered(text):
+def show_centered(text, subtitle=None):
     draw.rectangle((0, 0, width, height), outline=0, fill=0)
     _bbox = draw.textbbox((0, 0), text, font=font18)
-    x = (width - (_bbox[2] - _bbox[0])) / 2
-    y = (height - (_bbox[3] - _bbox[1])) / 2
-    draw.text((x, y), text, font=font14, fill=255)
+    text_w, text_h = _bbox[2] - _bbox[0], _bbox[3] - _bbox[1]
+    if subtitle:
+        _sbbox = draw.textbbox((0, 0), subtitle, font=font10)
+        sub_w, sub_h = _sbbox[2] - _sbbox[0], _sbbox[3] - _sbbox[1]
+        y = (height - text_h - 4 - sub_h) / 2
+        draw.text(((width - text_w) / 2, y), text, font=font14, fill=255)
+        draw.text(((width - sub_w) / 2, y + text_h + 4), subtitle, font=font10, fill=255)
+    else:
+        draw.text(((width - text_w) / 2, (height - text_h) / 2), text, font=font14, fill=255)
     oled.drawImage(image)
 
 
@@ -151,7 +157,7 @@ def animation_connection(process, root_type):
 
     if not dfu_detected:
         process.terminate()
-        show_centered("DFU FAILED")
+        show_centered("DFU FAILED", "Try again")
         time.sleep(3)
         current_menu = root_type
         cursor_position = 0
@@ -162,7 +168,7 @@ def animation_connection(process, root_type):
         exit_code = process.poll()
         if exit_code is not None:
             if exit_code != 0:
-                show_centered("DFU FAILED")
+                show_centered("DFU FAILED", "Try again")
                 time.sleep(3)
                 current_menu = root_type
                 cursor_position = 0
