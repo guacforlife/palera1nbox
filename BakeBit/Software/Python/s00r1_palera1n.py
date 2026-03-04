@@ -76,11 +76,20 @@ def display_menu_with_cursor(menu):
         draw.text((0, y_position), line, font=font14, fill=text_color)
     oled.drawImage(image)
 
-def animation_connection():
+def show_centered(text):
+    draw.rectangle((0, 0, width, height), outline=0, fill=0)
+    _bbox = draw.textbbox((0, 0), text, font=font18)
+    x = (width - (_bbox[2] - _bbox[0])) / 2
+    y = (height - (_bbox[3] - _bbox[1])) / 2
+    draw.text((x, y), text, font=font14, fill=255)
+    oled.drawImage(image)
+
+
+def animation_connection(process):
     global current_menu, cursor_position
 
     draw.rectangle((0, 0, width, height), outline=0, fill=0)
-    draw.text((0, 0), "Entering Recovery \u231b", font=font14, fill=255)
+    draw.text((0, 0), "Entering Recovery \u231b", font=font10, fill=255)
     oled.drawImage(image)
 
     while True:
@@ -114,26 +123,22 @@ def animation_connection():
             oled.drawImage(image)
             time.sleep(1)
 
-    draw.rectangle((0, 0, width, height), outline=0, fill=0)
-    text = "JAILBREAKING"
-    _bbox = draw.textbbox((0, 0), text, font=font18)
-    text_width = _bbox[2] - _bbox[0]
-    text_height = _bbox[3] - _bbox[1]
-    x_position = (width - text_width) / 2
-    y_position = (height - text_height) / 2
-    draw.text((x_position, y_position), text, font=font14, fill=255)
-    oled.drawImage(image)
-    time.sleep(20)
+    show_centered("JAILBREAKING")
 
-    draw.rectangle((0, 0, width, height), outline=0, fill=0)
-    text = "BOOTING"
-    _bbox = draw.textbbox((0, 0), text, font=font18)
-    text_width = _bbox[2] - _bbox[0]
-    text_height = _bbox[3] - _bbox[1]
-    x_position = (width - text_width) / 2
-    y_position = (height - text_height) / 2
-    draw.text((x_position, y_position), text, font=font14, fill=255)
-    oled.drawImage(image)
+    for _ in range(20):
+        exit_code = process.poll()
+        if exit_code is not None:
+            if exit_code != 0:
+                show_centered("DFU FAILED")
+                time.sleep(3)
+                current_menu = 'main'
+                cursor_position = 0
+                display_menu_with_cursor(menu_options[current_menu])
+                return
+            break
+        time.sleep(1)
+
+    show_centered("BOOTING")
     time.sleep(20)
 
     current_menu = 'main'
@@ -167,7 +172,7 @@ def execute_command(root_type, options):
     process.stdin.flush()
     background_processes.append(process)
 
-    animation_connection()
+    animation_connection(process)
 
 def receive_signal(signum, stack):
     global current_menu, cursor_position, rootless_options, rootfull_options
