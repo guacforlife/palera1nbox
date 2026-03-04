@@ -262,17 +262,6 @@ def receive_signal(signum, stack):
     display_menu_with_cursor(menu_options[current_menu])
 
 def main():
-    base_path = "/root/NanoHatOLED/BakeBit/Software/Python/"
-
-    for i in range(1, 7):
-        image_path = f"{base_path}image{i}.png"
-        anim_img = Image.open(image_path).convert('1')
-        oled.drawImage(anim_img)
-        if i == 6:
-            time.sleep(2)
-        else:
-            time.sleep(0.1)
-
     display_menu_with_cursor(menu_options[current_menu])
 
     signal.signal(signal.SIGUSR1, receive_signal)
