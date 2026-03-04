@@ -124,11 +124,16 @@ def animation_connection(process, root_type):
         except subprocess.TimeoutExpired:
             pass
 
-        # PongoOS: palera1n's custom bootloader, not visible to irecovery
+        # lsusb doesn't need exclusive device access (unlike irecovery)
         try:
             _lsusb = subprocess.run(['lsusb'], stdout=subprocess.PIPE,
                                     stderr=subprocess.DEVNULL, text=True, timeout=2)
-            if '05ac:4141' in _lsusb.stdout and process.poll() is None:
+            if '05ac:1281' in _lsusb.stdout:  # Recovery mode
+                break
+            if '05ac:1227' in _lsusb.stdout:  # DFU mode (palera1n may hold the device)
+                dfu_detected = True
+                break
+            if '05ac:4141' in _lsusb.stdout and process.poll() is None:  # PongoOS
                 show_centered("JAILBREAKING")
                 dfu_detected = True
                 break
@@ -151,42 +156,43 @@ def animation_connection(process, root_type):
 
         time.sleep(1)
 
-    for phase in phases:
-        for second in phase["countdown"]:
-            tick_start = time.monotonic()
-            draw.rectangle((0, 0, width, height), outline=0, fill=0)
-            anim_img = None
+    if not dfu_detected:
+        for phase in phases:
+            for second in phase["countdown"]:
+                tick_start = time.monotonic()
+                draw.rectangle((0, 0, width, height), outline=0, fill=0)
+                anim_img = None
 
-            if "is_text" in phase and phase["is_text"]:
-                if phase["message"] == "Prepare enter DFU":
-                    display_prepare_dfu()
-                else:
-                    draw.text((0, 0), phase["message"], font=font14, fill=255)
-            elif "Press" in phase["message"]:
-                anim_img = Image.open("/root/NanoHatOLED/BakeBit/Software/Python/powerandhome.png").convert('1')
-            elif "Release" in phase["message"]:
-                anim_img = Image.open("/root/NanoHatOLED/BakeBit/Software/Python/powerandhome2.png").convert('1')
+                if "is_text" in phase and phase["is_text"]:
+                    if phase["message"] == "Prepare enter DFU":
+                        display_prepare_dfu()
+                    else:
+                        draw.text((0, 0), phase["message"], font=font14, fill=255)
+                elif "Press" in phase["message"]:
+                    anim_img = Image.open("/root/NanoHatOLED/BakeBit/Software/Python/powerandhome.png").convert('1')
+                elif "Release" in phase["message"]:
+                    anim_img = Image.open("/root/NanoHatOLED/BakeBit/Software/Python/powerandhome2.png").convert('1')
 
-            if anim_img:
-                img_width, img_height = anim_img.size
-                x_position = (width - img_width) // 2
-                y_position = (height - img_height) // 2 - 10
-                image.paste(anim_img, (x_position, y_position))
+                if anim_img:
+                    img_width, img_height = anim_img.size
+                    x_position = (width - img_width) // 2
+                    y_position = (height - img_height) // 2 - 10
+                    image.paste(anim_img, (x_position, y_position))
 
-            draw.text((0, height - 20), f"Time: {second} sec", font=font18, fill=255)
-            oled.drawImage(image)
+                draw.text((0, height - 20), f"Time: {second} sec", font=font18, fill=255)
+                oled.drawImage(image)
 
-            if not dfu_detected:
-                try:
-                    _r = subprocess.run(['sudo', '/usr/bin/irecovery', '-q'],
-                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                        text=True, timeout=0.5)
-                    if 'MODE: DFU' in _r.stdout:
-                        dfu_detected = True
-                except subprocess.TimeoutExpired:
-                    pass
+                if not dfu_detected:
+                    try:
+                        _r = subprocess.run(['sudo', '/usr/bin/irecovery', '-q'],
+                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                            text=True, timeout=0.5)
+                        if 'MODE: DFU' in _r.stdout:
+                            dfu_detected = True
+                    except subprocess.TimeoutExpired:
+                        pass
 
-            time.sleep(max(0, 1.0 - (time.monotonic() - tick_start)))
+                time.sleep(max(0, 1.0 - (time.monotonic() - tick_start)))
 
     # Final check: DFU may have been entered during the last sleep window
     if not dfu_detected:
