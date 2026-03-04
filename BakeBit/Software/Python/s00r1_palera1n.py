@@ -238,7 +238,9 @@ def animation_connection(process, root_type):
         display_menu_with_cursor(menu_options[current_menu])
         return
 
-    for _ in range(20):
+    # Watch for PongoOS; trigger synthetic udev event to speed up palera1n's detection
+    pongo_triggered = False
+    for _ in range(120):  # up to 2 minutes
         exit_code = process.poll()
         if exit_code is not None:
             if exit_code != 0:
@@ -249,6 +251,18 @@ def animation_connection(process, root_type):
                 display_menu_with_cursor(menu_options[current_menu])
                 return
             break
+        if not pongo_triggered:
+            try:
+                _l = subprocess.run(['lsusb'], stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL, text=True, timeout=2)
+                if '05ac:4141' in _l.stdout:
+                    pongo_triggered = True
+                    subprocess.run(
+                        ['udevadm', 'trigger', '--type=devices', '--action=add',
+                         '--attr-match=idVendor=05ac', '--attr-match=idProduct=4141'],
+                        timeout=5)
+            except Exception:
+                pass
         time.sleep(1)
 
     show_centered("BOOTING")
