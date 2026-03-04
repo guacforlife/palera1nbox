@@ -111,9 +111,43 @@ def animation_connection(process, root_type):
     oled.drawImage(image)
 
     while True:
-        result = subprocess.run(['sudo', '/usr/bin/irecovery', '-q'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if 'MODE: Recovery' in result.stdout:
-            break
+        try:
+            result = subprocess.run(['sudo', '/usr/bin/irecovery', '-q'],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, timeout=0.8)
+            if 'MODE: Recovery' in result.stdout:
+                break
+            if 'MODE: DFU' in result.stdout:
+                dfu_detected = True
+                break
+        except subprocess.TimeoutExpired:
+            pass
+
+        # PongoOS: palera1n's custom bootloader, not visible to irecovery
+        try:
+            _lsusb = subprocess.run(['lsusb'], stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL, text=True, timeout=2)
+            if '05ac:4141' in _lsusb.stdout and process.poll() is None:
+                show_centered("JAILBREAKING")
+                dfu_detected = True
+                break
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+        # palera1n finished while we were waiting (e.g. resumed from PongoOS)
+        exit_code = process.poll()
+        if exit_code is not None:
+            if exit_code == 0:
+                show_centered("BOOTING")
+                time.sleep(20)
+            else:
+                show_centered("DFU FAILED", "Try again")
+                time.sleep(3)
+            current_menu = root_type
+            cursor_position = 0
+            display_menu_with_cursor(menu_options[current_menu])
+            return
+
         time.sleep(1)
 
     dfu_detected = False
