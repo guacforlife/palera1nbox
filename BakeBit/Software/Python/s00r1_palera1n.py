@@ -230,13 +230,40 @@ def animation_connection(process, root_type):
     show_centered("JAILBREAKING")
 
     if not dfu_detected:
-        process.terminate()
-        show_centered("DFU FAILED", "Try again")
-        time.sleep(3)
-        current_menu = root_type
-        cursor_position = 0
-        display_menu_with_cursor(menu_options[current_menu])
-        return
+        # After checkm8, the device briefly vanishes from USB (~7s on NanoPi) while
+        # it resets and re-enumerates in download mode (still 05ac:1227).
+        # Wait up to 30s before concluding DFU genuinely failed.
+        for _ in range(30):
+            exit_code = process.poll()
+            if exit_code is not None:
+                if exit_code == 0:
+                    dfu_detected = True
+                break
+            try:
+                _l = subprocess.run(['lsusb'], stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL, text=True, timeout=2)
+                for _pid in ('1227', '4141'):
+                    if f'05ac:{_pid}' in _l.stdout:
+                        dfu_detected = True
+                        subprocess.run(
+                            ['udevadm', 'trigger', '--type=devices', '--action=add',
+                             '--attr-match=idVendor=05ac', f'--attr-match=idProduct={_pid}'],
+                            timeout=5)
+                        break
+            except Exception:
+                pass
+            if dfu_detected:
+                break
+            time.sleep(1)
+
+        if not dfu_detected:
+            process.terminate()
+            show_centered("DFU FAILED", "Try again")
+            time.sleep(3)
+            current_menu = root_type
+            cursor_position = 0
+            display_menu_with_cursor(menu_options[current_menu])
+            return
 
     # Watch for PongoOS; trigger synthetic udev event to speed up palera1n's detection
     pongo_triggered = False
