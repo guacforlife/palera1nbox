@@ -350,7 +350,16 @@ def receive_signal(signum, stack):
             elif cursor_position == 3:
                 for process in background_processes:
                     process.terminate()
-                os.execv(sys.executable, [sys.executable, '/root/NanoHatOLED/BakeBit/Software/Python/menu.py'])
+                # Detached shell: kill everything then restart the daemon cleanly
+                subprocess.Popen(
+                    ['bash', '-c',
+                     'sleep 1 && pkill -9 -f palera1n; pkill -9 -f checkra1n; '
+                     'pkill -9 -f NanoHatOLED; pkill -9 -f menu.py; pkill -9 -f s00r1; '
+                     'sleep 1 && /usr/local/bin/oled-start'],
+                    start_new_session=True,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+                sys.exit(0)
         elif current_menu in ['rootless', 'rootfull']:
             if cursor_position == 0:  # Start
                 execute_command(current_menu, rootless_options if current_menu == 'rootless' else rootfull_options)
