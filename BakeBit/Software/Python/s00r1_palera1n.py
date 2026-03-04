@@ -154,6 +154,19 @@ def animation_connection(process, root_type):
 
             time.sleep(max(0, 1.0 - (time.monotonic() - tick_start)))
 
+    # Final check: DFU may have been entered during the last sleep window
+    if not dfu_detected:
+        for _ in range(3):
+            try:
+                _r = subprocess.run(['sudo', '/usr/bin/irecovery', '-q'],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, timeout=0.5)
+                if 'MODE: DFU' in _r.stdout:
+                    dfu_detected = True
+                    break
+            except subprocess.TimeoutExpired:
+                pass
+
     show_centered("JAILBREAKING")
 
     if not dfu_detected:
