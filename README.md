@@ -86,12 +86,30 @@ chmod +x /root/install.sh
 /root/install.sh
 ```
 
-The script runs in two phases separated by an automatic reboot:
+The script runs in two phases separated by an automatic reboot. Progress is logged with timestamps to stdout (and to the systemd journal in phase 2).
 
-- **Phase 1** (~5 min): installs packages, enables I2C + audio hardware overlays, schedules phase 2 as a systemd one-shot service, then reboots.
-- **Phase 2** (~15 min, runs automatically after reboot): builds libplist, libimobiledevice-glue, and libirecovery from source; downloads and deploys the palera1nbox project files; downloads palera1n v2.2.1; blacklists the `apple-mfi-fastcharge` kernel module; applies Python compatibility patches; runs the NanoHatOLED installer (which triggers a final reboot).
+**Phase 1** (~5 min):
+1. `apt-get update && apt-get upgrade`
+2. Installs core packages: `i2c-tools git vim armbian-config unzip python3-dev python3-pil python3-smbus python3-pip python3-serial libjpeg-dev`
+3. Installs palera1n runtime libraries: `libpango`, `libgtk-3-0`, `libusb-1.0-0`, `usbmuxd`, `libimobiledevice-utils`, `ifuse`, `mplayer`, and others
+4. Installs build tools: `build-essential autoconf automake libtool-bin pkg-config libusb-1.0-0-dev`
+5. Enables `i2c0` and `analog-codec` hardware overlays in `/boot/armbianEnv.txt` (appends if not already present)
+6. Writes a systemd one-shot service (`palera1nbox-install.service`) that will run phase 2 after reboot, then reboots
 
-After the final reboot the OLED display shows an animation and then the main menu. The box is ready.
+**Phase 2** (~15 min, runs automatically after reboot via systemd):
+1. Disables and removes the phase 2 systemd service (so it doesn't run again)
+2. Installs Python packages with `--break-system-packages`: `setuptools sh psutil luma.oled`; reinstalls `pillow` cleanly after luma.oled (luma.oled can pull in an incompatible Pillow build)
+3. Sets `PKG_CONFIG_PATH=/usr/local/lib/pkgconfig` so all three source-built libraries find each other
+4. Builds and installs from source into `/usr/local`: **libplist** → **libimobiledevice-glue** → **libirecovery** (with explicit `LDFLAGS=-Wl,-rpath,/usr/local/lib` so irecovery finds the right libplist at runtime)
+5. Clones `friendlyarm/NanoHatOLED` into `/root/NanoHatOLED`
+6. Downloads and extracts the palera1nbox v2.0.0 release archive into `/root/NanoHatOLED/BakeBit/Software/Python`
+7. Downloads **palera1n v2.2.1** arm64 binary into the same directory
+8. Blacklists `apple-mfi-fastcharge` via `/etc/modprobe.d/no-apple-mfi.conf` and unloads it if currently loaded
+9. Applies Python compatibility patches to `s00r1_palera1n.py` (see [Changes from upstream](#changes-from-upstream))
+10. Sets executable permissions on `palera1n` and `checkra1n`; creates `/usr/bin/irecovery` symlink
+11. Runs `NanoHatOLED/install.sh` **last** — this triggers a final automatic reboot; the OLED animation plays on next boot and the main menu appears
+
+After the final reboot the box is ready.
 
 ---
 
@@ -378,7 +396,14 @@ This branch applies the following changes to the original s00r1/palera1nbox:
 | 3 | Signal handler updated to match new menu positions | Handler still used old indices after menu reorder, causing wrong actions on button press |
 | 4 | `cmd.append('-l')` for rootless | palera1n v2.2.1 requires explicit `-l`/`--fakefs` flag; old implicit rootless mode removed |
 | 5 | Fork-bomb guard in `execute_command()` | Pressing Start multiple times spawned multiple palera1n processes; each fought for the USB device |
-| 6 | `subprocess.Popen(stdin=PIPE)` + `stdin.write(b"\n")` | palera1n v2.2.1 prompts "Press Enter when ready for DFU mode"; without this the process hangs silently |
+| 6 | `subprocess.Popen(stdin=PIPE)` + `stdin.write(b"\n")` at `phase_idx == 1` | palera1n v2.2.1 prompts "Press Enter when ready for DFU mode"; sending `\n` immediately caused palera1n to advance to "Hold Home+Power" while the OLED still showed the "Prepare" countdown — delayed to after the countdown finishes |
+| 7 | Exit button: `os.execv('/bin/bash', ['/bin/bash', '/tmp/oled-restart.sh'])` in signal handler | `subprocess.Popen` (fork) in a signal handler is not async-signal-safe and deadlocks; a flag+main-loop approach fails when blocked inside `animation_connection`; `execv` replaces the process image immediately from any call site |
+
+### `BakeBit/Software/Python/bakebit_nanohat_oled.py`
+
+| # | Change | Reason |
+|---|--------|--------|
+| 1 | `os.system("python3 menu.py")` → `subprocess.Popen([sys.executable, '...menu.py'])` | `os.system` is blocking: bakebit stayed alive as a `python3.12` process. NanoHatOLED signals **all** `python3.12` processes, so bakebit absorbed SIGUSR1/SIGUSR2 (default action: terminate). Its PID cache then broke, causing every other button press to be dropped |
 
 ### `install.sh`
 
@@ -404,7 +429,8 @@ palera1nbox/
 ├── BakeBit/
 │   └── Software/
 │       └── Python/
-│           └── s00r1_palera1n.py    # patched menu script (this branch)
+│           ├── bakebit_nanohat_oled.py  # patched OLED launcher (this branch)
+│           └── s00r1_palera1n.py        # patched menu script (this branch)
 ├── install.sh                        # two-phase automated installer (this branch)
 ├── install_palera1nbox.sh            # original upstream install script
 ├── index.html                        # original website

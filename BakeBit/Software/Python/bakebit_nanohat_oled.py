@@ -5,6 +5,7 @@ from PIL import ImageFont, ImageDraw
 from random import randint
 import time
 import os
+import sys
 import subprocess
 
 serial = i2c(port=0, address=0x3C)
@@ -75,4 +76,7 @@ def animate(device):
     os.system("python3 /root/NanoHatOLED/BakeBit/Software/Python/menu.py")
 
 device.cleanup()
-os.system("python3 /root/NanoHatOLED/BakeBit/Software/Python/menu.py")
+# Use Popen (non-blocking) so bakebit exits immediately and doesn't stay as a
+# live python3 process — NanoHatOLED signals all python3.12 procs, so a
+# long-lived bakebit would absorb signals and break button handling.
+subprocess.Popen([sys.executable, '/root/NanoHatOLED/BakeBit/Software/Python/menu.py'])

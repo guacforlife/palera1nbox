@@ -177,7 +177,14 @@ def animation_connection(process, root_type):
         time.sleep(1)
 
     if not dfu_detected:
-        for phase in phases:
+        for phase_idx, phase in enumerate(phases):
+            if phase_idx == 1:
+                # "Prepare" done — now sync palera1n's DFU entry guidance with our UI
+                try:
+                    process.stdin.write(b"\n")
+                    process.stdin.flush()
+                except Exception:
+                    pass
             for second in phase["countdown"]:
                 tick_start = time.monotonic()
                 draw.rectangle((0, 0, width, height), outline=0, fill=0)
@@ -320,10 +327,9 @@ def execute_command(root_type, options):
 
     print("Command:", ' '.join(cmd))
 
-    # palera1n v2.2.1 prompts "Press Enter when ready" — send it automatically
+    # palera1n v2.2.1 prompts "Press Enter when ready for DFU mode"
+    # We send '\n' after the "Prepare" countdown so it stays in sync with our UI
     process = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-    process.stdin.write(b"\n")
-    process.stdin.flush()
     background_processes.append(process)
 
     animation_connection(process, root_type)
@@ -350,16 +356,9 @@ def receive_signal(signum, stack):
             elif cursor_position == 3:
                 for process in background_processes:
                     process.terminate()
-                # Detached shell: kill everything then restart the daemon cleanly
-                subprocess.Popen(
-                    ['bash', '-c',
-                     'sleep 1 && pkill -9 -f palera1n; pkill -9 -f checkra1n; '
-                     'pkill -9 -f NanoHatOLED; pkill -9 -f menu.py; pkill -9 -f s00r1; '
-                     'sleep 1 && /usr/local/bin/oled-start'],
-                    start_new_session=True,
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
-                sys.exit(0)
+                # execv is async-signal-safe: replaces this process with the
+                # restart script immediately, even if blocked in animation_connection
+                os.execv('/bin/bash', ['/bin/bash', '/tmp/oled-restart.sh'])
         elif current_menu in ['rootless', 'rootfull']:
             if cursor_position == 0:  # Start
                 execute_command(current_menu, rootless_options if current_menu == 'rootless' else rootfull_options)
@@ -385,6 +384,19 @@ def receive_signal(signum, stack):
     display_menu_with_cursor(menu_options[current_menu])
 
 def main():
+    # Write restart script once at startup so the signal handler can execv to it
+    with open('/tmp/oled-restart.sh', 'w') as _f:
+        _f.write('#!/bin/bash\n'
+                 'sleep 1\n'
+                 'pkill -9 palera1n\n'
+                 'pkill -9 checkra1n\n'
+                 'pkill -9 NanoHatOLED\n'
+                 'pkill -9 -f menu.py\n'
+                 'pkill -9 -f s00r1_palera1n\n'
+                 'sleep 1\n'
+                 '/usr/local/bin/oled-start\n')
+    os.chmod('/tmp/oled-restart.sh', 0o755)
+
     signal.signal(signal.SIGUSR1, receive_signal)
     signal.signal(signal.SIGUSR2, receive_signal)
     signal.signal(signal.SIGALRM, receive_signal)
