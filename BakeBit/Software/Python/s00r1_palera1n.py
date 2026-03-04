@@ -136,10 +136,14 @@ def animation_connection(process, root_type):
             oled.drawImage(image)
 
             if not dfu_detected:
-                _r = subprocess.run(['sudo', '/usr/bin/irecovery', '-q'],
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if 'MODE: DFU' in _r.stdout:
-                    dfu_detected = True
+                try:
+                    _r = subprocess.run(['sudo', '/usr/bin/irecovery', '-q'],
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        text=True, timeout=0.5)
+                    if 'MODE: DFU' in _r.stdout:
+                        dfu_detected = True
+                except subprocess.TimeoutExpired:
+                    pass
 
             time.sleep(max(0, 1.0 - (time.monotonic() - tick_start)))
 
