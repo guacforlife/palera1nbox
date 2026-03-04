@@ -4,6 +4,7 @@ import time
 import signal
 import subprocess
 import os
+import sys
 
 phases = [
     {"message": "Prepare enter DFU", "countdown": [3, 2, 1], "is_text": True},
@@ -235,8 +236,7 @@ def receive_signal(signum, stack):
             elif cursor_position == 3:
                 for process in background_processes:
                     process.terminate()
-                subprocess.Popen('python3 /root/NanoHatOLED/BakeBit/Software/Python/menu.py', shell=True)
-                exit(0)
+                os.execv(sys.executable, [sys.executable, '/root/NanoHatOLED/BakeBit/Software/Python/menu.py'])
         elif current_menu in ['rootless', 'rootfull']:
             if cursor_position == 0:  # Start
                 execute_command(current_menu, rootless_options if current_menu == 'rootless' else rootfull_options)
@@ -262,11 +262,11 @@ def receive_signal(signum, stack):
     display_menu_with_cursor(menu_options[current_menu])
 
 def main():
-    display_menu_with_cursor(menu_options[current_menu])
-
     signal.signal(signal.SIGUSR1, receive_signal)
     signal.signal(signal.SIGUSR2, receive_signal)
     signal.signal(signal.SIGALRM, receive_signal)
+
+    display_menu_with_cursor(menu_options[current_menu])
 
     while True:
         time.sleep(0.2)
