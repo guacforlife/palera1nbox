@@ -133,10 +133,17 @@ def animation_connection(process, root_type):
                 break
             if '05ac:1227' in _lsusb.stdout:  # DFU visible but palera1n hasn't claimed it yet
                 if not dfu_detected:
-                    # palera1n misses pre-connected DFU (no LIBUSB_HOTPLUG_ENUMERATE)
-                    # Instruct user to replug so the hotplug callback fires
-                    show_centered("DFU found", "Replug iPad")
+                    # palera1n misses pre-connected DFU (no LIBUSB_HOTPLUG_ENUMERATE).
+                    # Synthetic udev "add" event causes libusb hotplug to fire.
+                    show_centered("DFU found", "Wait...")
                     dfu_detected = True
+                    try:
+                        subprocess.run(
+                            ['udevadm', 'trigger', '--type=devices', '--action=add',
+                             '--attr-match=idVendor=05ac', '--attr-match=idProduct=1227'],
+                            timeout=5)
+                    except Exception:
+                        pass
                 dfu_wait += 1
                 if dfu_wait > 30:  # ~60s timeout waiting for replug
                     process.terminate()
