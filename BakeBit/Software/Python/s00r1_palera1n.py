@@ -110,6 +110,7 @@ def animation_connection(process, root_type):
     draw.text((0, 0), "Entering Recovery \u231b", font=font10, fill=255)
     oled.drawImage(image)
 
+    dfu_detected = False
     while True:
         try:
             result = subprocess.run(['sudo', '/usr/bin/irecovery', '-q'],
@@ -150,7 +151,6 @@ def animation_connection(process, root_type):
 
         time.sleep(1)
 
-    dfu_detected = False
     for phase in phases:
         for second in phase["countdown"]:
             tick_start = time.monotonic()
