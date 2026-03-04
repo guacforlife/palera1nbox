@@ -98,6 +98,7 @@ def animation_connection(process):
             break
         time.sleep(1)
 
+    dfu_detected = False
     for phase in phases:
         for second in phase["countdown"]:
             draw.rectangle((0, 0, width, height), outline=0, fill=0)
@@ -123,7 +124,22 @@ def animation_connection(process):
             oled.drawImage(image)
             time.sleep(1)
 
+            if not dfu_detected:
+                _r = subprocess.run(['sudo', '/usr/bin/irecovery', '-q'],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if 'MODE: DFU' in _r.stdout:
+                    dfu_detected = True
+
     show_centered("JAILBREAKING")
+
+    if not dfu_detected:
+        process.terminate()
+        show_centered("DFU FAILED")
+        time.sleep(3)
+        current_menu = 'main'
+        cursor_position = 0
+        display_menu_with_cursor(menu_options[current_menu])
+        return
 
     for _ in range(20):
         exit_code = process.poll()
