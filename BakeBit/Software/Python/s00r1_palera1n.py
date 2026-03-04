@@ -80,7 +80,7 @@ def animation_connection():
     global current_menu, cursor_position
 
     draw.rectangle((0, 0, width, height), outline=0, fill=0)
-    draw.text((0, 0), "Enter Recovery", font=font14, fill=255)
+    draw.text((0, 0), "Entering Recovery \u231b", font=font14, fill=255)
     oled.drawImage(image)
 
     while True:
@@ -142,11 +142,11 @@ def animation_connection():
 
 def execute_command(root_type, options):
     global background_processes
-    # Guard: don't spawn if palera1n is already running
+    # Kill any stale palera1n before retrying (e.g. after a failed DFU)
     background_processes = [p for p in background_processes if p.poll() is None]
-    if background_processes:
-        print('palera1n already running, ignoring duplicate request')
-        return
+    for p in background_processes:
+        p.terminate()
+    background_processes = []
     cmd = ['sudo', '/root/NanoHatOLED/BakeBit/Software/Python/palera1n']
     args_map = rootless_arg_map if root_type == 'rootless' else rootfull_arg_map
 
