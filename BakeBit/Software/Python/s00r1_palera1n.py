@@ -111,6 +111,7 @@ def animation_connection(process, root_type):
     oled.drawImage(image)
 
     dfu_detected = False
+    dfu_wait = 0  # counts iterations where DFU was seen but palera1n hasn't progressed
     while True:
         try:
             result = subprocess.run(['sudo', '/usr/bin/irecovery', '-q'],
@@ -130,9 +131,21 @@ def animation_connection(process, root_type):
                                     stderr=subprocess.DEVNULL, text=True, timeout=2)
             if '05ac:1281' in _lsusb.stdout:  # Recovery mode
                 break
-            if '05ac:1227' in _lsusb.stdout:  # DFU mode (palera1n may hold the device)
-                dfu_detected = True
-                break
+            if '05ac:1227' in _lsusb.stdout:  # DFU visible but palera1n hasn't claimed it yet
+                if not dfu_detected:
+                    # palera1n misses pre-connected DFU (no LIBUSB_HOTPLUG_ENUMERATE)
+                    # Instruct user to replug so the hotplug callback fires
+                    show_centered("DFU found", "Replug iPad")
+                    dfu_detected = True
+                dfu_wait += 1
+                if dfu_wait > 30:  # ~60s timeout waiting for replug
+                    process.terminate()
+                    show_centered("DFU FAILED", "Try again")
+                    time.sleep(3)
+                    current_menu = root_type
+                    cursor_position = 0
+                    display_menu_with_cursor(menu_options[current_menu])
+                    return
             if '05ac:4141' in _lsusb.stdout and process.poll() is None:  # PongoOS
                 show_centered("JAILBREAKING")
                 dfu_detected = True
