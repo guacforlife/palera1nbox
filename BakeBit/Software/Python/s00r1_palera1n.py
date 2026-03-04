@@ -65,15 +65,26 @@ update_checklist_options('rootfull_options', rootfull_options)
 
 def display_menu_with_cursor(menu):
     draw.rectangle((0, 0, width, height), outline=0, fill=0)
+
+    if current_menu in ['rootless', 'rootfull']:
+        draw.text((0, 0), current_menu.upper(), font=font10, fill=255)
+        font = font10
+        item_height = 13
+        y_offset = 13
+    else:
+        font = font14
+        item_height = 15
+        y_offset = 0
+
     start_index = max(0, cursor_position - 2)
     end_index = start_index + 4
     for i, line in enumerate(menu[start_index:end_index]):
-        y_position = i * 15
+        y_position = y_offset + i * item_height
         text_color = 255
         if i + start_index == cursor_position:
-            draw.rectangle((0, y_position, width, y_position + 14), outline=255, fill=255)
+            draw.rectangle((0, y_position, width, y_position + item_height - 1), outline=255, fill=255)
             text_color = 0
-        draw.text((0, y_position), line, font=font14, fill=text_color)
+        draw.text((0, y_position), line, font=font, fill=text_color)
     oled.drawImage(image)
 
 def show_centered(text):
@@ -85,7 +96,7 @@ def show_centered(text):
     oled.drawImage(image)
 
 
-def animation_connection(process):
+def animation_connection(process, root_type):
     global current_menu, cursor_position
 
     draw.rectangle((0, 0, width, height), outline=0, fill=0)
@@ -101,6 +112,7 @@ def animation_connection(process):
     dfu_detected = False
     for phase in phases:
         for second in phase["countdown"]:
+            tick_start = time.monotonic()
             draw.rectangle((0, 0, width, height), outline=0, fill=0)
             anim_img = None
 
@@ -122,7 +134,6 @@ def animation_connection(process):
 
             draw.text((0, height - 20), f"Time: {second} sec", font=font18, fill=255)
             oled.drawImage(image)
-            time.sleep(1)
 
             if not dfu_detected:
                 _r = subprocess.run(['sudo', '/usr/bin/irecovery', '-q'],
@@ -130,13 +141,15 @@ def animation_connection(process):
                 if 'MODE: DFU' in _r.stdout:
                     dfu_detected = True
 
+            time.sleep(max(0, 1.0 - (time.monotonic() - tick_start)))
+
     show_centered("JAILBREAKING")
 
     if not dfu_detected:
         process.terminate()
         show_centered("DFU FAILED")
         time.sleep(3)
-        current_menu = 'main'
+        current_menu = root_type
         cursor_position = 0
         display_menu_with_cursor(menu_options[current_menu])
         return
@@ -147,7 +160,7 @@ def animation_connection(process):
             if exit_code != 0:
                 show_centered("DFU FAILED")
                 time.sleep(3)
-                current_menu = 'main'
+                current_menu = root_type
                 cursor_position = 0
                 display_menu_with_cursor(menu_options[current_menu])
                 return
@@ -157,7 +170,7 @@ def animation_connection(process):
     show_centered("BOOTING")
     time.sleep(20)
 
-    current_menu = 'main'
+    current_menu = root_type
     cursor_position = 0
     display_menu_with_cursor(menu_options[current_menu])
 
@@ -188,7 +201,7 @@ def execute_command(root_type, options):
     process.stdin.flush()
     background_processes.append(process)
 
-    animation_connection(process)
+    animation_connection(process, root_type)
 
 def receive_signal(signum, stack):
     global current_menu, cursor_position, rootless_options, rootfull_options
